@@ -1,0 +1,131 @@
+---
+title: "SOK-1005-assignment-1"
+author: “Marte J. Skadssem Haetta Eikelmann”
+format: pdf
+echo: true
+output: true
+---
+
+**First step: Clear the sheet and load necessary packages**.
+
+```{r}
+
+#removing all previous data to start on a clean sheet.
+
+rm(list=ls())
+
+
+#loading necessary packages
+
+library(tidyverse)
+library(dplyr)
+library(zoo)
+library(lubridate)
+```
+
+**Second step: Downloading the necessary data to answer the assignment.**
+
+```{r}
+#downloading Lower-Troposphere data
+
+df_lower <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/tlt/uahncdc_lt_6.0.txt")
+```
+
+```{r}
+#downloading Mid-Troposphere data 
+
+df_mid <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/tmt/uahncdc_mt_6.0.txt")
+```
+
+```{r}
+#downloading Tropopause data 
+
+df_trop <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/ttp/uahncdc_tp_6.0.txt")
+```
+
+```{r}
+#downloading Lower-Stratosphere data 
+
+df_lower_strat <- read_table2("https://www.nsstc.uah.edu/data/msu/v6.0/tls/uahncdc_ls_6.0.txt")
+```
+
+**Third step: Filtering, adjusting and calculating data**
+
+```{r}
+#filtering and adjusting the data to be able to answer the assignment
+
+df_lower <- df_lower %>%
+  select(c(Year,Mo,Globe)) %>%  #selecting the needed vaiables
+  filter(!row_number() %in% c(531:542)) %>%  #removing the last rows with text
+  filter(Year >= 1980) %>%  #filtering by year
+  mutate(Globe=as.numeric(Globe)) %>%  #changing Globe variable from chr to num
+  rename(globe_lower = Globe) %>%  #renaming Globe variable for later convenience
+  mutate(roll_avg_lower = zoo::rollmean(globe_lower, 12, fill=NA, align='right'))  #calculating a new variable; the 12-month rolling avarage of the area
+```
+
+```{r}
+#filtering and adjusting the data to be able to answer the assignment
+
+df_mid <- df_mid %>%
+  select(c(Year,Mo,Globe)) %>%
+  filter(!row_number() %in% c(531:542)) %>%
+  filter(Year >= 1980) %>%
+  mutate(Globe=as.numeric(Globe)) %>%
+  rename(globe_mid = Globe) %>%
+  mutate(roll_avg_mid = zoo::rollmean(globe_mid, 12, fill=NA, align='right'))
+```
+
+```{r}
+df_trop <- df_trop %>%
+  select(c(Year,Mo,Globe)) %>%
+  filter(!row_number() %in% c(531:542)) %>%
+  filter(Year >= 1980) %>%
+  mutate(Globe=as.numeric(Globe)) %>%
+  rename(globe_trop = Globe) %>%
+  mutate(roll_avg_trop = zoo::rollmean(globe_trop, 12, fill=NA, align='right'))
+```
+
+```{r}
+df_lower_strat <- df_lower_strat %>%
+  select(c(Year,Mo,Globe)) %>%
+  filter(!row_number() %in% c(531:542)) %>%
+  filter(Year >= 1980) %>%
+  mutate(Globe=as.numeric(Globe)) %>%
+  rename(globe_lower_strat = Globe) %>%
+  mutate(roll_avg_lower_strat = zoo::rollmean(globe_lower_strat, 12, fill=NA, align='right'))
+```
+
+```{r}
+#joining the dataframes together by Year and Mo and naming the new dataframe df_atmosphere.
+
+df_atmosphere <- df_lower %>%
+  mutate(Date = ymd(paste(Year, Mo, 1, sep="-"))) %>%
+  left_join(df_mid, by=c("Year", "Mo")) %>%
+  left_join(df_trop, by=c("Year", "Mo")) %>%
+  left_join(df_lower_strat, by=c("Year", "Mo"))
+```
+
+```{r}
+#making a new variable called average which is an average of the roll avarages of the different areas in the atmosphere. Also relocating the time-variable Date to be after Mo. 
+
+df_atmosphere <- df_atmosphere %>%
+  mutate(average=rowMeans(.[ , c("roll_avg_lower","roll_avg_mid","roll_avg_trop","roll_avg_lower_strat")],na.rm = TRUE)) %>%
+  relocate(Date, .after = Mo)
+  
+```
+
+**Fourth step: Plotting the data**
+
+```{r}
+#plotting the atmosphere-data and adding labs to the figure. Also adding a black horizontal line to marke zero degree Celcius.
+
+df_atmosphere %>% 
+  ggplot() +
+  geom_line(mapping = aes(x=Date, y=average,color="Average of the atmosphere's areas"), size=1.3, alpha=0.7) +
+  geom_line(mapping = aes(x=Date, y=roll_avg_mid, color="Mid-Tropopause")) +
+  geom_line(mapping = aes(x=Date, y=roll_avg_trop, color="Tropopause")) +
+  geom_line(mapping = aes(x=Date, y=roll_avg_lower_strat, color="Lower Stratosphere")) +
+  geom_line(mapping = aes(x=Date, y=roll_avg_lower, color="Lower Tropopause")) +
+  geom_hline(yintercept = 0, color = "black", size = 0.35) +
+  labs(title="Plot of average and rolling average temperature in the atmosphere from 1980 until today", x="Year", y="Temperature in degree Celsius", color = "Areas of the atmosphere:")
+```
